@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "src/llvm-wrap",
+    "src/syntax",
+]

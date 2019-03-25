@@ -1,0 +1,9 @@
+[package]
+name = "llvm-wrap"
+version = "0.1.0"
+authors = ["Delyan Dobrev <delqn.dobrev@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+llvm = { package = "llvm-sys", version = "60" }
+libc = "0.2.50"

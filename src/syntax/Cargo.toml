@@ -1,0 +1,8 @@
+[package]
+name = "syntax"
+version = "0.1.0"
+authors = ["Delyan Dobrev <delqn.dobrev@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+lexpar = { git = "https://github.com/d3lio/lexpar" }

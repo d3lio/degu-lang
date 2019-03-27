@@ -1,0 +1,6 @@
+let sum_three a b c =
+    print_number a
+    print_number b
+    a + b - 5 + c * 10
+
+let main _ = print_number (sum_three 1 2 3)

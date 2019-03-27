@@ -113,8 +113,6 @@ parse_rules! {
     },
 
     _expr: AstNode => {
-        [ex: __expr] => ex,
-
         // Block expression
         [(l, BlockStart), top: _top_level, (r, BlockEnd)] => {
             AstNode::new(merge(l, r), Ast::Block(top))
@@ -128,9 +126,14 @@ parse_rules! {
                 AstNode::new(span, Ast::Ref(name))
             }
         },
+
+        [ex: __expr] => ex,
     },
 
     __expr: AstNode => {
+        // Reference (Function call argument)
+        [(span, Ident(name))] => AstNode::new(span, Ast::Ref(name)),
+
         // Parenthesis expression
         [(_, LParen), ex: expr, (_, RParen)] => ex,
 

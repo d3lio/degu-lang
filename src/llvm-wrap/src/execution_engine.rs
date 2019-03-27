@@ -3,6 +3,12 @@ use llvm::execution_engine::{
     LLVMCreateExecutionEngineForModule,
     LLVMDisposeExecutionEngine,
     LLVMGetFunctionAddress,
+    LLVMLinkInMCJIT,
+};
+use llvm::target::{
+    LLVM_InitializeNativeTarget,
+    LLVM_InitializeNativeAsmPrinter,
+    LLVM_InitializeNativeAsmParser,
 };
 
 use std::ffi::CStr;
@@ -13,6 +19,23 @@ use std::ops::Drop;
 use super::module::Module;
 use super::llvm_ref::LlvmRef;
 use super::value::AnyValue;
+
+pub fn initialize_jit() {
+    use std::process;
+
+    unsafe {
+        LLVMLinkInMCJIT();
+        if LLVM_InitializeNativeTarget() == 1 {
+            process::exit(1);
+        }
+        if LLVM_InitializeNativeAsmPrinter() == 1 {
+            process::exit(1);
+        }
+        if LLVM_InitializeNativeAsmParser() == 1 {
+            process::exit(1);
+        }
+    }
+}
 
 pub struct ExecutionEngine {
     pub(crate) ptr: <Self as LlvmRef>::Ref,

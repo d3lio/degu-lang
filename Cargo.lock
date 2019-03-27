@@ -12,6 +12,15 @@ version = "1.0.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "compiler"
+version = "0.1.0"
+dependencies = [
+ "lexpar 0.1.0 (git+https://github.com/d3lio/lexpar)",
+ "llvm-wrap 0.1.0",
+ "syntax 0.1.0",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -92,7 +101,6 @@ name = "syntax"
 version = "0.1.0"
 dependencies = [
  "lexpar 0.1.0 (git+https://github.com/d3lio/lexpar)",
- "llvm-wrap 0.1.0",
 ]
 
 [[package]]

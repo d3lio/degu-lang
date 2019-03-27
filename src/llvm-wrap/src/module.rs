@@ -1,5 +1,6 @@
 use llvm::core::{
     LLVMAddFunction,
+    LLVMGetNamedFunction,
     LLVMDisposeModule,
     LLVMModuleCreateWithNameInContext,
     LLVMPrintModuleToString,
@@ -44,16 +45,30 @@ impl Module {
     }
 
     pub fn function_prototype(&mut self, name: Option<&CStr>, fn_type: Type) -> Function {
-        unsafe {
-            Function {
-                value: AnyValue {
-                    ptr: LLVMAddFunction(
+        Function {
+            value: AnyValue {
+                ptr: unsafe {
+                    LLVMAddFunction(
                         self.ptr,
                         name.map_or(EMPTY_C_STR, CStr::as_ptr),
                         fn_type.ptr,
-                    ),
+                    )
                 },
-            }
+            },
+        }
+    }
+
+    pub fn get_function(&self, name: &CStr) -> Option<Function> {
+        let ptr = unsafe { LLVMGetNamedFunction(self.ptr, name.as_ptr()) };
+
+        if ptr.is_null() {
+            None
+        } else {
+            Some(Function {
+                value: AnyValue {
+                    ptr,
+                },
+            })
         }
     }
 }

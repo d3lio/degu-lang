@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "src/compiler",
     "src/llvm-wrap",
     "src/syntax",
 ]

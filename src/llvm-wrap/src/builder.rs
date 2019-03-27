@@ -3,6 +3,9 @@ use libc::c_uint;
 use llvm::core::{
     LLVMBuildAdd,
     LLVMBuildCall,
+    LLVMBuildFAdd,
+    LLVMBuildFMul,
+    LLVMBuildFSub,
     LLVMBuildMul,
     LLVMBuildRet,
     LLVMBuildRetVoid,
@@ -140,5 +143,11 @@ impl Builder {
         build_add => LLVMBuildAdd,
         build_sub => LLVMBuildSub,
         build_mul => LLVMBuildMul,
+    }
+
+    impl_bin_op!{
+        build_fp_add => LLVMBuildFAdd,
+        build_fp_sub => LLVMBuildFSub,
+        build_fp_mul => LLVMBuildFMul,
     }
 }

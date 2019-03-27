@@ -5,12 +5,12 @@ use std::ffi::CStr;
 use super::basic_block::BasicBlock;
 use super::llvm_ref::LlvmRef;
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct AnyValue {
     pub(crate) ptr: <Self as LlvmRef>::Ref,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Function {
     pub(crate) value: AnyValue,
 }
@@ -29,6 +29,10 @@ impl AnyValue {
 impl Function {
     pub fn as_value(&self) -> &AnyValue {
         &self.value
+    }
+
+    pub fn to_value(self) -> AnyValue {
+        self.value
     }
 
     pub fn entry_block(&self) -> Option<BasicBlock> {

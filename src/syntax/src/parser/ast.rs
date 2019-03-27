@@ -1,5 +1,3 @@
-pub mod visitor;
-
 use lexpar::lexer::Span;
 
 #[derive(Debug)]

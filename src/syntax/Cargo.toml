@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 lexpar = { git = "https://github.com/d3lio/lexpar" }
+llvm-wrap = { path = "../llvm-wrap" }

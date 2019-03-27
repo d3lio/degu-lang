@@ -47,8 +47,7 @@ impl Context {
         Builder::new(self)
     }
 
-    pub fn create_module(&mut self,
-    name: &CStr) -> Module {
+    pub fn create_module(&mut self, name: &CStr) -> Module {
         Module::new(name, self)
     }
 }

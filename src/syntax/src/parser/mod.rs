@@ -131,7 +131,7 @@ parse_rules! {
     },
 
     __expr: AstNode => {
-        // Paren expression
+        // Parenthesis expression
         [(_, LParen), ex: expr, (_, RParen)] => ex,
 
         // Literal expression

@@ -92,6 +92,7 @@ name = "syntax"
 version = "0.1.0"
 dependencies = [
  "lexpar 0.1.0 (git+https://github.com/d3lio/lexpar)",
+ "llvm-wrap 0.1.0",
 ]
 
 [[package]]

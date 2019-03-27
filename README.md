@@ -6,7 +6,7 @@ A take at a scripting language with an ML (Meta Language) family syntax. Heavily
 
 You need to have a local LLVM sdk. [The llvm cmake guide](https://llvm.org/docs/CMake.html) will help you as well as [the llvm-sys crate](https://crates.io/crates/llvm-sys) since that is what the project depends on.
 
-What I've found useful is to pass a parallel build flag to `cmake --build`. For Windows this is `/maxcpucount:<n>` and would look something like `cmake --build . --config Release -- /maxcpucount:4`.
+What I've found useful is to pass a parallel build flag to `cmake --build`. For Windows' MSVC this is `/maxcpucount:<n>` and would look something like `cmake --build . --config Release -- /maxcpucount:4`.
 
 The current required version of LLVM is 6 which will change when I get to recompile LLVM again.
 

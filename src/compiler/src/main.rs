@@ -1,9 +1,8 @@
 mod compiler;
 
 use lexpar::lexer::Span;
-use lexpar::parser::ParseError;
 
-use syntax::lexer::{self, Term};
+use syntax::lexer;
 use syntax::parser::Parser;
 use syntax::parser::ast::{Ast, AstNode};
 
@@ -21,24 +20,22 @@ fn read_file(name: &str) -> io::Result<String> {
     Ok(contents)
 }
 
-fn run(source: &str) -> Result<(), ParseError<Term>> {
+fn run(source: &str) {
     let lexer = lexer::lexer();
     let iter = lexer.src_iter(source);
-    let ast = Parser::parse(iter)?;
-    println!("== ast ==\n\n{:?}\n", ast);
+    let ast = Parser::parse(iter).unwrap();
+    // println!("== ast ==\n\n{:?}\n", ast);
 
     let mut compiler = Compiler::new();
 
     let ast = AstNode::new(Span::new(0, source.len(), 0), Ast::Block(ast));
 
-    compiler.compile(&ast);
+    compiler.compile(&ast).unwrap();
     println!("== llvm ir ==\n\n{:?}", compiler.module());
 
     println!("== runtime ==\n");
     let mut runtime = compiler.into_runtime();
     runtime.run_main();
-
-    Ok(())
 }
 
 fn main() -> io::Result<()> {
@@ -47,9 +44,7 @@ fn main() -> io::Result<()> {
 
     println!("== {} ==\n\n{}", name, source);
 
-    if let Err(err) = run(&source) {
-        println!("{:?}", err);
-    }
+    run(&source);
 
     Ok(())
 }

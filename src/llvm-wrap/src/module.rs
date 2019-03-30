@@ -23,6 +23,7 @@ pub struct Module {
 impl Debug for Module {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         unsafe {
+            // TODO: Does this require LLVMDisposeMessage?
             let dump = LLVMPrintModuleToString(self.ptr);
             write!(f, "{}", CStr::from_ptr(dump).to_str().unwrap())
         }

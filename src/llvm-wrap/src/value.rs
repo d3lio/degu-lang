@@ -1,9 +1,19 @@
-use llvm::core::{LLVMCountParams, LLVMGetEntryBasicBlock, LLVMGetParams, LLVMSetValueName};
+use llvm::core::{
+    LLVMCountParams,
+    LLVMGetEntryBasicBlock,
+    LLVMGetParams,
+    LLVMSetValueName,
+    LLVMPrintValueToString,
+};
 
 use std::ffi::CStr;
+use std::fmt::{self, Debug, Formatter};
 
 use super::basic_block::BasicBlock;
 use super::llvm_ref::LlvmRef;
+
+// TODO: improve this module to make a better use of Rust's type system to guard
+// from invalid operations like integer add on floating point numbers and so on.
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct AnyValue {
@@ -15,10 +25,26 @@ pub struct Function {
     pub(crate) value: AnyValue,
 }
 
-pub trait Value: LlvmRef {}
+pub trait Value: Debug + LlvmRef {}
 
 impl Value for AnyValue {}
 impl Value for Function {}
+
+impl Debug for AnyValue {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        unsafe {
+            // TODO: Does this require LLVMDisposeMessage?
+            let dump = LLVMPrintValueToString(self.ptr);
+            write!(f, "{}", CStr::from_ptr(dump).to_str().unwrap())
+        }
+    }
+}
+
+impl Debug for Function {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.as_value())
+    }
+}
 
 impl AnyValue {
     pub fn set_name(&mut self, name: &CStr) {

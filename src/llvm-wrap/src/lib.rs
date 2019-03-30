@@ -1,3 +1,4 @@
+pub mod analysis;
 pub mod basic_block;
 pub mod builder;
 pub mod context;

@@ -55,6 +55,7 @@ impl ExecutionEngine {
         let err = &mut ptr::null_mut();
 
         let result = unsafe {
+            // TODO: Does this require LLVMDisposeMessage?
             LLVMCreateExecutionEngineForModule(ee, module.llvm_ref(), err)
         };
 

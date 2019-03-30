@@ -1,8 +1,9 @@
 use lexpar::lexer::Span;
 
-use llvm_wrap::prelude::*;
-use llvm_wrap::intern::CStringInternPool;
+use llvm_wrap::analysis::{VerifierFailureAction, verify_function, verify_module};
 use llvm_wrap::execution_engine::initialize_jit;
+use llvm_wrap::intern::CStringInternPool;
+use llvm_wrap::prelude::*;
 
 use syntax::parser::ast::{Ast, AstNode, BinOpKind, Prototype};
 
@@ -20,23 +21,31 @@ struct Environment {
 }
 
 pub struct Compiler {
-    // field order matters as it's the drop order as well
-    // TODO: use lifetimes to try and create an explicit drop order
+    // Field order is drop order. Important for LLVM objects.
+    // TODO: Figure out a way to not depend on the field order.
+    // (Implementing Drop for Compiler is not an options since it prevents field move)
     builder: Builder,
     module: Module,
     context: Context,
-    pool: CStringInternPool,
 
+    pool: CStringInternPool,
     env: Environment,
 }
 
 pub struct Runtime {
+    // Field order is drop order. Important for LLVM objects.
+    // TODO: Figure out a way to not depend on the field order.
     ee: ExecutionEngine,
     _builder: Builder,
     _context: Context,
-    pool: CStringInternPool,
 
+    pool: CStringInternPool,
     env: Environment,
+}
+
+#[derive(Debug)]
+pub struct CompilerError {
+    message: String,
 }
 
 impl Compiler {
@@ -63,20 +72,29 @@ impl Compiler {
         &self.module
     }
 
-    pub fn compile(&mut self, ast: &AstNode) -> &mut Compiler {
+    pub fn compile(&mut self, ast: &AstNode) -> Result<&mut Compiler, CompilerError> {
         self.init_std();
-        self.codegen(ast);
-        self
+        self.codegen(ast)?;
+
+        let (is_bad, message) = verify_module(
+            &self.module,
+            VerifierFailureAction::PrintMessageAction);
+
+        if is_bad {
+            Err(CompilerError { message })
+        } else {
+            Ok(self)
+        }
     }
 
     pub fn into_runtime(self) -> Runtime {
         initialize_jit();
 
         let mut runtime = Runtime {
-            pool: self.pool,
             _context: self.context,
             _builder: self.builder,
             ee: ExecutionEngine::new(self.module).unwrap(),
+            pool: self.pool,
             env: self.env,
         };
 
@@ -89,45 +107,59 @@ impl Compiler {
     //     let Compiler { pool, context, module, builder, .. } = self;
     // }
 
-    fn codegen(&mut self, ast: &AstNode) -> AnyValue {
+    fn codegen(&mut self, ast: &AstNode) -> Result<AnyValue, CompilerError> {
         match &*ast.expr {
-            Ast::Number(num) => self.builder.build_const_fp(self.context.f64_type(), *num),
+            Ast::Number(num) => Ok(self.builder.build_const_fp(self.context.f64_type(), *num)),
             Ast::Ref(name) => {
                 if name == "_" {
-                    panic!(format!("Illegal reference _ at {:?}", pretty_span(&ast.span)));
+                    return Err(CompilerError {
+                        message: format!(
+                            "Illegal reference _ at {:?}",
+                            pretty_span(&ast.span)),
+                    });
                 }
 
                 self.env.vars.get(name)
-                    .expect(&format!(
-                        "Unknown variable ref {:?} at {:?}",
-                        name,
-                        pretty_span(&ast.span)))
-                    .clone()
+                    .map(|var| var.clone())
+                    .ok_or(CompilerError{
+                        message: format!(
+                            "Unknown variable ref {:?} at {:?}",
+                            name,
+                            pretty_span(&ast.span)),
+                    })
             },
             Ast::Call { name, args } => {
                 let values = args
                     .iter()
                     .map(|arg| self.codegen(arg))
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 let f = self.env.defs.get(name)
-                    .expect(&format!(
-                        "Unknown function ref {:?} at {:?}",
-                        name,
-                        pretty_span(&ast.span)));
+                    .ok_or(CompilerError{
+                        message: format!(
+                            "Unknown function ref {:?} at {:?}",
+                            name,
+                            pretty_span(&ast.span)),
+                    })?;
 
-                self.builder
-                    .build_call(f, &values, None)
-                    .unwrap()
+                self.builder.build_call(f, &values, None)
+                    .map_err(|err| CompilerError { message: format!("{:?}", err) })
             },
             Ast::BinOp { kind, lhs, rhs } => {
-                let lhs = self.codegen(&lhs);
-                let rhs = self.codegen(&rhs);
-                match kind {
-                    BinOpKind::Add => self.builder.build_fp_add(&lhs, &rhs, None),
-                    BinOpKind::Sub => self.builder.build_fp_sub(&lhs, &rhs, None),
-                    BinOpKind::Mul => self.builder.build_fp_mul(&lhs, &rhs, None),
+                let lhs = self.codegen(&lhs)?;
+                let rhs = self.codegen(&rhs)?;
+
+                macro_rules! build_binop {
+                    ($f:ident, $name: expr) => {
+                        self.builder.$f(&lhs, &rhs, Some(self.pool.intern($name)))
+                    };
                 }
+
+                Ok(match kind {
+                    BinOpKind::Add => build_binop!(build_fp_add, "addtmp"),
+                    BinOpKind::Sub => build_binop!(build_fp_sub, "subtmp"),
+                    BinOpKind::Mul => build_binop!(build_fp_mul, "multmp"),
+                })
             },
             Ast::Function { prototype: Prototype { name, args }, body } => {
                 let f64_type = self.context.f64_type();
@@ -136,10 +168,11 @@ impl Compiler {
 
                 let mut f = {
                     let ret_type = if is_main { void_type } else { f64_type };
+                    let arg_types = if is_main { vec![] } else { vec![f64_type; args.len()] };
 
                     self.module.function_prototype(
                         Some(self.pool.intern(name.as_ref())),
-                        Context::function_type(ret_type, &vec![f64_type; args.len()], false),
+                        Context::function_type(ret_type, &arg_types, false),
                     )
                 };
 
@@ -155,25 +188,35 @@ impl Compiler {
                 let bb = BasicBlock::create_and_append(self.pool.intern("entry"), &mut f);
                 self.builder.position_at_end(&bb);
 
-                let ret = self.codegen(&body);
+                let ret = self.codegen(&body)?;
                 if is_main {
                     self.builder.build_ret_void();
                 } else {
                     self.builder.build_ret(&ret);
                 }
 
+                if verify_function(&f, VerifierFailureAction::PrintMessageAction) {
+                    return Err(CompilerError {
+                        message: format!("{:?}", f),
+                    });
+                }
+
                 self.env.defs.insert(name.clone(), f.clone());
 
-                f.to_value()
+                Ok(f.to_value())
             },
             Ast::Block(exprs) => {
                 exprs
                     .iter()
                     .map(|expr| self.codegen(expr))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
                     .last()
-                    .expect(&format!(
-                        "Found empty block which is invalid value! {:?}",
-                        pretty_span(&ast.span)))
+                    .ok_or(CompilerError {
+                        message: format!(
+                            "Found empty block which is invalid value! {:?}",
+                            pretty_span(&ast.span)),
+                    })
             },
             _ => unimplemented!(),
         }
@@ -182,10 +225,10 @@ impl Compiler {
 
 impl Runtime {
     pub fn run_main(&mut self) {
-        let main: extern "C" fn(f64) = unsafe {
+        let main: extern fn() = unsafe {
             std::mem::transmute(self.ee.function_address(self.pool.intern("main")))
         };
 
-        main(0.0);
+        main();
     }
 }

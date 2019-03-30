@@ -1,6 +1,7 @@
 use lexpar::lexer::Span;
 
 use llvm_wrap::analysis::{VerifierFailureAction, verify_function, verify_module};
+use llvm_wrap::builder::RealPredicate;
 use llvm_wrap::execution_engine::initialize_jit;
 use llvm_wrap::intern::CStringInternPool;
 use llvm_wrap::prelude::*;
@@ -146,6 +147,8 @@ impl Compiler {
                     .map_err(|err| CompilerError { message: format!("{:?}", err) })
             },
             Ast::BinOp { kind, lhs, rhs } => {
+                use RealPredicate as RP;
+
                 let lhs = self.codegen(&lhs)?;
                 let rhs = self.codegen(&rhs)?;
 
@@ -156,10 +159,29 @@ impl Compiler {
                 }
 
                 Ok(match kind {
-                    BinOpKind::Add => build_binop!(build_fp_add, "addtmp"),
-                    BinOpKind::Sub => build_binop!(build_fp_sub, "subtmp"),
-                    BinOpKind::Mul => build_binop!(build_fp_mul, "multmp"),
+                    BinOpKind::Eq           => self.build_fp_cmp(RP::RealUEQ, &lhs, &rhs),
+                    BinOpKind::NotEq        => self.build_fp_cmp(RP::RealUNE, &lhs, &rhs),
+                    BinOpKind::GreaterThan  => self.build_fp_cmp(RP::RealUGT, &lhs, &rhs),
+                    BinOpKind::GreaterEq    => self.build_fp_cmp(RP::RealUGE, &lhs, &rhs),
+                    BinOpKind::LessThan     => self.build_fp_cmp(RP::RealULT, &lhs, &rhs),
+                    BinOpKind::LessEq       => self.build_fp_cmp(RP::RealULE, &lhs, &rhs),
+                    BinOpKind::Add          => build_binop!(build_fp_add, "addtmp"),
+                    BinOpKind::Sub          => build_binop!(build_fp_sub, "subtmp"),
+                    BinOpKind::Mul          => build_binop!(build_fp_mul, "multmp"),
                 })
+            },
+            Ast::Block(exprs) => {
+                exprs
+                    .iter()
+                    .map(|expr| self.codegen(expr))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .last()
+                    .ok_or(CompilerError {
+                        message: format!(
+                            "Found empty block which is invalid value! {:?}",
+                            pretty_span(&ast.span)),
+                    })
             },
             Ast::Function { prototype: Prototype { name, args }, body } => {
                 let f64_type = self.context.f64_type();
@@ -205,21 +227,18 @@ impl Compiler {
 
                 Ok(f.to_value())
             },
-            Ast::Block(exprs) => {
-                exprs
-                    .iter()
-                    .map(|expr| self.codegen(expr))
-                    .collect::<Result<Vec<_>, _>>()?
-                    .into_iter()
-                    .last()
-                    .ok_or(CompilerError {
-                        message: format!(
-                            "Found empty block which is invalid value! {:?}",
-                            pretty_span(&ast.span)),
-                    })
-            },
             _ => unimplemented!(),
         }
+    }
+
+    fn build_fp_cmp(&mut self, p: RealPredicate, l: &AnyValue, r: &AnyValue) -> AnyValue {
+        let cmp = self.builder.build_fp_cmp(p, l, r, Some(self.pool.intern("cmptmp")));
+
+        self.builder.build_cast_uint_to_fp(
+            cmp,
+            self.context.f64_type(),
+            Some(self.pool.intern("booltmp")),
+        )
     }
 }
 

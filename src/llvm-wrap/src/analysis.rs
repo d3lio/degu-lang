@@ -23,7 +23,10 @@ pub enum VerifierFailureAction {
 }
 
 impl VerifierFailureAction {
-    fn map_to_llvm(self) -> LLVMVerifierFailureAction {
+    fn to_llvm(self) -> LLVMVerifierFailureAction {
+        use LLVMVerifierFailureAction::*;
+        use VerifierFailureAction::*;
+
         match self {
             AbortProcessAction => LLVMAbortProcessAction,
             PrintMessageAction => LLVMPrintMessageAction,
@@ -32,12 +35,10 @@ impl VerifierFailureAction {
     }
 }
 
-use LLVMVerifierFailureAction::*;
-use VerifierFailureAction::*;
 
 pub fn verify_function(f: &Function, action: VerifierFailureAction) -> bool {
     unsafe {
-        LLVMVerifyFunction(f.llvm_ref(), action.map_to_llvm()) != 0
+        LLVMVerifyFunction(f.llvm_ref(), action.to_llvm()) != 0
     }
 }
 
@@ -45,7 +46,7 @@ pub fn verify_function(f: &Function, action: VerifierFailureAction) -> bool {
 pub fn verify_module(m: &Module, action: VerifierFailureAction) -> (bool, String) {
     let msg = &mut ptr::null_mut();
     unsafe {
-        let res = LLVMVerifyModule(m.llvm_ref(), action.map_to_llvm(), msg) != 0;
+        let res = LLVMVerifyModule(m.llvm_ref(), action.to_llvm(), msg) != 0;
         let message = CStr::from_ptr(*msg).to_str().unwrap().to_string();
         LLVMDisposeMessage(*msg);
         (res, message)

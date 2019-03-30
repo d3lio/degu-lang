@@ -24,7 +24,9 @@ pub enum Token {
     Plus, Minus,
     Asterisk, FSlash,
     Eq, NotEq,
-    DoubleDot,
+    GreaterThan, GreaterEq,
+    LessThan, LessEq,
+    Range,
 
     // Unary Operators
     Excl,

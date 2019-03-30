@@ -26,6 +26,12 @@ pub enum BinOpKind {
     Add,
     Sub,
     Mul,
+    Eq,
+    NotEq,
+    LessThan,
+    LessEq,
+    GreaterThan,
+    GreaterEq,
 }
 
 #[derive(Debug)]

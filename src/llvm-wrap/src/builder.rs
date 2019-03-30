@@ -1,15 +1,18 @@
 use libc::c_uint;
 
+use llvm::LLVMRealPredicate;
 use llvm::core::{
     LLVMBuildAdd,
     LLVMBuildCall,
     LLVMBuildFAdd,
+    LLVMBuildFCmp,
     LLVMBuildFMul,
     LLVMBuildFSub,
     LLVMBuildMul,
     LLVMBuildRet,
     LLVMBuildRetVoid,
     LLVMBuildSub,
+    LLVMBuildUIToFP,
     LLVMConstInt,
     LLVMConstReal,
     LLVMCreateBuilderInContext,
@@ -38,6 +41,52 @@ pub enum BuilderError {
         expected: usize,
         actual: usize,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum RealPredicate {
+    RealPredicateFalse,
+    RealOEQ,
+    RealOGT,
+    RealOGE,
+    RealOLT,
+    RealOLE,
+    RealONE,
+    RealORD,
+    RealUNO,
+    RealUEQ,
+    RealUGT,
+    RealUGE,
+    RealULT,
+    RealULE,
+    RealUNE,
+    RealPredicateTrue,
+}
+
+impl RealPredicate {
+    fn to_llvm(self) -> LLVMRealPredicate {
+        use LLVMRealPredicate::*;
+        use RealPredicate::*;
+
+        match self {
+            RealPredicateFalse => LLVMRealPredicateFalse,
+            RealOEQ => LLVMRealOEQ,
+            RealOGT => LLVMRealOGT,
+            RealOGE => LLVMRealOGE,
+            RealOLT => LLVMRealOLT,
+            RealOLE => LLVMRealOLE,
+            RealONE => LLVMRealONE,
+            RealORD => LLVMRealORD,
+            RealUNO => LLVMRealUNO,
+            RealUEQ => LLVMRealUEQ,
+            RealUGT => LLVMRealUGT,
+            RealUGE => LLVMRealUGE,
+            RealULT => LLVMRealULT,
+            RealULE => LLVMRealULE,
+            RealUNE => LLVMRealUNE,
+            RealPredicateTrue => LLVMRealPredicateTrue,
+        }
+    }
 }
 
 impl Drop for Builder {
@@ -137,6 +186,44 @@ impl Builder {
                 )
             },
         })
+    }
+
+    pub fn build_cast_uint_to_fp(
+        &mut self,
+        value: AnyValue,
+        ty: Type,
+        name: Option<&CStr>) -> AnyValue
+    {
+        AnyValue {
+            ptr: unsafe {
+                LLVMBuildUIToFP(
+                    self.ptr,
+                    value.llvm_ref(),
+                    ty.llvm_ref(),
+                    name.map_or(EMPTY_C_STR, CStr::as_ptr),
+                )
+            }
+        }
+    }
+
+    pub fn build_fp_cmp(
+        &mut self,
+        op: RealPredicate,
+        a: &AnyValue,
+        b: &AnyValue,
+        name: Option<&CStr>) -> AnyValue
+    {
+        AnyValue {
+            ptr: unsafe {
+                LLVMBuildFCmp(
+                    self.ptr,
+                    op.to_llvm(),
+                    a.llvm_ref(),
+                    b.llvm_ref(),
+                    name.map_or(EMPTY_C_STR, CStr::as_ptr),
+                )
+            },
+        }
     }
 
     impl_bin_op!{

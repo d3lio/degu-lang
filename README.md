@@ -16,17 +16,17 @@ Other than just run `cargo run -p compiler`.
 
 main.dg
 ```f#
-let sum_three a b c =
+let number_ops a b c =
     print_number a
     print_number b
-    a + b - 5 + c * 10
+    a - 2 + b - 3 + c * 10 + (a < b)
 
-let main _ = print_number (sum_three 1 2 3)
+let main _ = print_number (number_ops 1 2 3)
 ```
 
 stdout
 ```
 1
 2
-28
+29
 ```

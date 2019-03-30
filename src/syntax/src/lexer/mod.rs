@@ -11,8 +11,8 @@ pub fn lexer() -> Lexer<(Span, Token)> {
 
     Lexer::new(lex_rules![
         r"[ \t\n]+"                 => |span, text, _| (span, Whitespace(text.to_owned())),
-        r"/\*[^(?:*/)]*\*/"         => |span, text, _| (span, Comment(text[2..text.len() - 2].to_owned())),
-        r"//[^\n]*"                 => |span, text, _| (span, Comment(text[2..].to_owned())),
+        r"/\*([^(?:*/)]*)\*/"       => |span, _, text| (span, Comment(text[0].to_owned())),
+        r"//([^\n]*)"               => |span, _, text| (span, Comment(text[0].to_owned())),
 
         r"fn"                       => |span, _, _| (span, KwFn),
         r"let"                      => |span, _, _| (span, KwLet),
@@ -41,7 +41,11 @@ pub fn lexer() -> Lexer<(Span, Token)> {
         r"/"                        => |span, _, _| (span, FSlash),
         r"=="                       => |span, _, _| (span, Eq),
         r"!="                       => |span, _, _| (span, NotEq),
-        r"\.\."                     => |span, _, _| (span, DoubleDot),
+        r">"                        => |span, _, _| (span, GreaterThan),
+        r">="                       => |span, _, _| (span, GreaterEq),
+        r"<"                        => |span, _, _| (span, LessThan),
+        r"<="                       => |span, _, _| (span, LessEq),
+        r"\.\."                     => |span, _, _| (span, Range),
 
         r"!"                        => |span, _, _| (span, Excl),
 
@@ -51,7 +55,7 @@ pub fn lexer() -> Lexer<(Span, Token)> {
         r","                        => |span, _, _| (span, Comma),
         r"\|"                       => |span, _, _| (span, Pipe),
         r";"                        => |span, _, _| (span, Semicolon),
-        r"'((?:\\'|[^'])*)'"          => |span, _, text| (span, SingleQuote(text[0].to_owned())),
-        r#""((?:\\"|[^"])*)""#        => |span, _, text| (span, DoubleQuote(text[0].to_owned())),
+        r"'((?:\\'|[^'])*)'"        => |span, _, text| (span, SingleQuote(text[0].to_owned())),
+        r#""((?:\\"|[^"])*)""#      => |span, _, text| (span, DoubleQuote(text[0].to_owned())),
     ], |span, text| (span, Unknown(text.to_owned())))
 }

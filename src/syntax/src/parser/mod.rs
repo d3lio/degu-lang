@@ -107,9 +107,15 @@ parse_rules! {
 
     #[binop(infix)]
     expr: AstNode => _expr where u32 => |lhs, rhs| {
-        &(_, Plus)       | 0 => create_binop(BinOpKind::Add, lhs, rhs),
-        &(_, Minus)      | 0 => create_binop(BinOpKind::Sub, lhs, rhs),
-        &(_, Asterisk)   | 1 => create_binop(BinOpKind::Mul, lhs, rhs),
+        &(_, Eq)            | 0 => create_binop(BinOpKind::Eq, lhs, rhs),
+        &(_, NotEq)         | 0 => create_binop(BinOpKind::NotEq, lhs, rhs),
+        &(_, GreaterThan)   | 0 => create_binop(BinOpKind::GreaterThan, lhs, rhs),
+        &(_, GreaterEq)     | 0 => create_binop(BinOpKind::GreaterEq, lhs, rhs),
+        &(_, LessThan)      | 0 => create_binop(BinOpKind::LessThan, lhs, rhs),
+        &(_, LessEq)        | 0 => create_binop(BinOpKind::LessEq, lhs, rhs),
+        &(_, Plus)          | 1 => create_binop(BinOpKind::Add, lhs, rhs),
+        &(_, Minus)         | 1 => create_binop(BinOpKind::Sub, lhs, rhs),
+        &(_, Asterisk)      | 2 => create_binop(BinOpKind::Mul, lhs, rhs),
     },
 
     _expr: AstNode => {

@@ -12,6 +12,7 @@ use std::ops::Drop;
 
 use super::context::Context;
 use super::llvm_ref::LlvmRef;
+use super::transformation::FunctionPassManagerBuilder;
 use super::types::Type;
 use super::util::EMPTY_C_STR;
 use super::value::{AnyValue, Function};
@@ -39,7 +40,7 @@ impl Drop for Module {
 }
 
 impl Module {
-    pub(crate) fn new(name: &CStr, context: &Context) -> Self {
+    pub(crate) fn new(name: &CStr, context: &mut Context) -> Self {
         Self {
             ptr: unsafe { LLVMModuleCreateWithNameInContext(name.as_ptr(), context.llvm_ref()) },
         }
@@ -71,5 +72,9 @@ impl Module {
                 },
             })
         }
+    }
+
+    pub fn function_pass_manager_builder(&mut self) -> FunctionPassManagerBuilder {
+        FunctionPassManagerBuilder::new(self)
     }
 }

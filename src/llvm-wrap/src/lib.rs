@@ -6,6 +6,7 @@ pub mod execution_engine;
 pub mod intern;
 pub mod llvm_ref;
 pub mod module;
+pub mod transformation;
 pub mod types;
 pub mod value;
 
@@ -17,6 +18,7 @@ pub mod prelude {
     pub use super::context::Context;
     pub use super::execution_engine::ExecutionEngine;
     pub use super::module::Module;
+    pub use super::transformation::FunctionPassManager;
     pub use super::types::Type;
     pub use super::value::{AnyValue, Function, Value};
 }

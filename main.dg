@@ -1,6 +1,7 @@
 let number_ops a b c =
     print_number a
     print_number b
-    a - 2 + b - 3 + c * 10 + (a < b)
+    print_number c
+    (a + 1) * (a + 1) + 2 + (4 + 5 * 2 - 10) - 4
 
 let main _ = print_number (number_ops 1 2 3)

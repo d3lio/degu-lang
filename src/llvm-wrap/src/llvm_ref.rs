@@ -6,6 +6,7 @@ use super::builder::Builder;
 use super::context::Context;
 use super::execution_engine::ExecutionEngine;
 use super::module::Module;
+use super::transformation::FunctionPassManagerBuilder;
 use super::types::Type;
 use super::value::{AnyValue, Function};
 
@@ -36,4 +37,5 @@ imp_llvm_ref! {
     Type, LLVMTypeRef, |self| self.ptr;
     AnyValue, LLVMValueRef, |self| self.ptr;
     Function, LLVMValueRef, |self| self.value.ptr;
+    FunctionPassManagerBuilder, LLVMPassManagerRef, |self| self.ptr;
 }

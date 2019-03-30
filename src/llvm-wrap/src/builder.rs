@@ -115,7 +115,7 @@ macro_rules! impl_bin_op {
 }
 
 impl Builder {
-    pub(crate) fn new(context: &Context) -> Self {
+    pub(crate) fn new(context: &mut Context) -> Self {
         Self {
             ptr: unsafe { LLVMCreateBuilderInContext(context.llvm_ref()) },
         }

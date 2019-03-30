@@ -25,6 +25,7 @@ pub struct Compiler {
     // Field order is drop order. Important for LLVM objects.
     // TODO: Figure out a way to not depend on the field order.
     // (Implementing Drop for Compiler is not an options since it prevents field move)
+    function_optimizer: FunctionPassManager,
     builder: Builder,
     module: Module,
     context: Context,
@@ -53,19 +54,25 @@ impl Compiler {
     pub fn new() -> Self {
         let mut pool = CStringInternPool::new();
         let mut context = Context::new();
-        let module = context.create_module(pool.intern("main"));
+        let mut module = context.create_module(pool.intern("main"));
         let builder = context.create_builder();
-        let env = Environment {
-            vars: HashMap::new(),
-            defs: HashMap::new(),
-        };
+        let function_optimizer = module.function_pass_manager_builder()
+            .add_instruction_combination_pass()
+            .add_reassociate_pass()
+            .add_gvn_pass()
+            .add_cfg_simplification_pass()
+            .build();
 
         Self {
             pool,
             context,
             module,
             builder,
-            env,
+            function_optimizer,
+            env: Environment {
+                vars: HashMap::new(),
+                defs: HashMap::new(),
+            }
         }
     }
 
@@ -222,6 +229,8 @@ impl Compiler {
                         message: format!("{:?}", f),
                     });
                 }
+
+                self.function_optimizer.run(&mut f);
 
                 self.env.defs.insert(name.clone(), f.clone());
 

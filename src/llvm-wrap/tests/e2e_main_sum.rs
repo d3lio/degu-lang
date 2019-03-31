@@ -1,7 +1,6 @@
 use llvm::core::*;
-use llvm::execution_engine::*;
-use llvm::target::*;
 
+use llvm_wrap::execution_engine::initialize_jit;
 use llvm_wrap::intern::CStringInternPool;
 use llvm_wrap::llvm_ref::LlvmRef;
 use llvm_wrap::prelude::{BasicBlock, Context, ExecutionEngine, Function, Module, Type};
@@ -34,12 +33,17 @@ fn create_function(
     f
 }
 
+static mut OUTPUT: Option<u32> = None;
+
 #[no_mangle]
-extern "C" fn print_u32(value: u32) {
-    println!("{}", value);
+extern fn print_u32(value: u32) {
+    unsafe {
+        OUTPUT = Some(value);
+    }
 }
 
-pub fn main() {
+#[test]
+pub fn e2e_main_sum() {
     let mut pool = CStringInternPool::new();
 
     println!("init llvm");
@@ -106,16 +110,7 @@ pub fn main() {
 
     println!("build ee");
     let mut ee = unsafe {
-        LLVMLinkInMCJIT();
-        if LLVM_InitializeNativeTarget() == 1 {
-            std::process::exit(1);
-        }
-        if LLVM_InitializeNativeAsmPrinter() == 1 {
-            std::process::exit(1);
-        }
-        if LLVM_InitializeNativeAsmParser() == 1 {
-            std::process::exit(1);
-        }
+        initialize_jit();
 
         let pass_manager = LLVMCreateFunctionPassManagerForModule(module.llvm_ref());
         LLVMInitializeFunctionPassManager(pass_manager);
@@ -131,9 +126,13 @@ pub fn main() {
         ee.add_global_mapping(print_f.as_value(), print_u32 as usize);
     }
 
-    let main: extern "C" fn() = unsafe {
+    let main: extern fn() = unsafe {
         std::mem::transmute(ee.function_address(pool.intern("main")))
     };
 
     main();
+
+    unsafe {
+        assert_eq!(OUTPUT, Some(6));
+    }
 }

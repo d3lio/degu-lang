@@ -201,28 +201,27 @@ impl Compiler {
         let else_block = BasicBlock::new(self.pool.intern("else"), &mut f);
         let merge_block = BasicBlock::new(self.pool.intern("ifmerge"), &mut f);
 
-        self.builder.build_cond_br(&cond, &then_block, &else_block);
+        self.builder.build_conditional_branch(&cond, &then_block, &else_block);
 
         self.builder.position_at_end(&then_block);
         let then = self.codegen(then)?;
-        self.builder.build_br(&merge_block);
+        self.builder.build_branch(&merge_block);
 
-        // TODO: Look into this if and how exactly can it change.
-        // Codegen of 'then' can change the current block, update then for the PHI.
+        // Codegen of `then` can change the current block so update `then_block` for the PHI.
         let then_block = self.builder.get_insert_block();
 
+        self.builder.position_at_end(&else_block);
         let el = if let Some(ref el) = el {
-            self.builder.position_at_end(&else_block);
-            let el = self.codegen(&el)?;
-            self.builder.build_br(&merge_block);
-            el
+            self.codegen(el)?
         } else {
-            // FIXME: There should be no panic here!
-            panic!("No else.");
+            // FIXME: This is incorrect and should not be reached with a proper type system!
+            // The only allowed follow ups should be the same type as the `then` block
+            // or a `never` value - return/exit/unimplemented/unreachable.
+            self.builder.build_const_fp(self.context.f64_type(), std::f64::INFINITY)
         };
+        self.builder.build_branch(&merge_block);
 
-        // TODO: Look into this if and how exactly can it change.
-        // Codegen of 'else' can change the current block, update then for the PHI.
+        // Codegen of `else` can change the current block so update `else_block` for the PHI.
         let else_block = self.builder.get_insert_block();
 
         self.builder.position_at_end(&merge_block);

@@ -217,13 +217,18 @@ impl Builder {
         }
     }
 
-    pub fn build_br(&mut self, dest: &BasicBlock) -> AnyValue {
+    pub fn build_branch(&mut self, dest: &BasicBlock) -> AnyValue {
         AnyValue {
             ptr: unsafe { LLVMBuildBr(self.ptr, dest.llvm_ref()) },
         }
     }
 
-    pub fn build_cond_br(&mut self, cond: &AnyValue, then: &BasicBlock, el: &BasicBlock) -> AnyValue {
+    pub fn build_conditional_branch(
+        &mut self,
+        cond: &AnyValue,
+        then: &BasicBlock,
+        el: &BasicBlock) -> AnyValue
+    {
         AnyValue {
             ptr: unsafe {
                 LLVMBuildCondBr(self.ptr, cond.llvm_ref(), then.llvm_ref(), el.llvm_ref())

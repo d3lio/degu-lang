@@ -84,6 +84,7 @@ parse_rules! {
 parse_rules! {
     term: Term;
 
+    // Statements
     def: AstNode => {
         [(span, KwLet), (_, Ident(name)), params: params, (_, Assign), ex: expr] => {
             let span = span.extend(ex.span.hi);
@@ -105,6 +106,7 @@ parse_rules! {
         }
     },
 
+    // T0 expr (Binary operations with a precedence algorithm)
     #[binop(infix)]
     expr: AstNode => _expr where u32 => |lhs, rhs| {
         &(_, Eq)            | 0 => create_binop(BinOpKind::Eq, lhs, rhs),
@@ -118,7 +120,9 @@ parse_rules! {
         &(_, Asterisk)      | 2 => create_binop(BinOpKind::Mul, lhs, rhs),
     },
 
+    // T1 expr (Compound expressions)
     _expr: AstNode => {
+        // TODO: move this out of binary operations.
         // Block expression
         [(l, BlockStart), top: _top_level, (r, BlockEnd)] => {
             AstNode::new(merge(l, r), Ast::Block(top))
@@ -133,9 +137,11 @@ parse_rules! {
             }
         },
 
+        [_if: _if] => _if,
         [ex: __expr] => ex,
     },
 
+    // T2 expr (Simple expressions)
     __expr: AstNode => {
         // Reference (Function call argument)
         [(span, Ident(name))] => AstNode::new(span, Ast::Ref(name)),
@@ -153,7 +159,33 @@ parse_rules! {
     },
 }
 
-// Reference or function invocation
+// If-else expressions
+parse_rules! {
+    term: Term;
+
+    _if: AstNode => {
+        [(mut span, KwIf), condition: expr, (_, KwThen), then: expr, el: _else] => {
+            if let Some(ref el) = el {
+                span.hi = el.span.hi;
+            } else {
+                span.hi = then.span.hi;
+            }
+
+            AstNode::new(span, Ast::If {
+                condition,
+                then,
+                el,
+            })
+        },
+    },
+
+    _else: Option<AstNode> => {
+        [(_, KwElse), ex: expr] => Some(ex),
+        [@] => None,
+    },
+}
+
+// Reference or function invocation helpers
 parse_rules! {
     term: Term;
 
@@ -176,7 +208,7 @@ parse_rules! {
     },
 }
 
-// Functions
+// Function definition helpers
 parse_rules! {
     term: Term;
 

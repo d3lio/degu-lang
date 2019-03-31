@@ -21,7 +21,7 @@ pub struct Prototype {
     pub args: Vec<String>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BinOpKind {
     Add,
     Sub,
@@ -55,5 +55,10 @@ pub enum Ast {
         kind: BinOpKind,
         lhs: AstNode,
         rhs: AstNode,
+    },
+    If {
+        condition: AstNode,
+        then: AstNode,
+        el: Option<AstNode>,
     },
 }

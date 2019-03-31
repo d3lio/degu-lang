@@ -123,6 +123,7 @@ impl Compiler {
             Ast::Block(exprs) => self.build_block(&ast.span, exprs),
             Ast::Ref(name) => self.build_ref(&ast.span, name),
             Ast::Call { name, args } => self.build_call(&ast.span, name, args),
+            Ast::If { condition, then, el } => self.build_if(condition, then, el),
             Ast::BinOp { kind, lhs, rhs } => self.build_binop(*kind, lhs, rhs),
             Ast::Function { prototype: Prototype { name, args }, body } => {
                 self.build_function(name, args, body)
@@ -182,6 +183,62 @@ impl Compiler {
             .map_err(|err| CompilerError { message: format!("{:?}", err) })
     }
 
+    fn build_if(&mut self, cond: &AstNode, then: &AstNode, el: &Option<AstNode>) -> CodegenResult {
+        let cond = {
+            let cond = self.codegen(cond)?;
+            let zero = self.builder.build_const_fp(self.context.f64_type(), 0.0);
+
+            self.builder.build_fp_cmp(
+                RealPredicate::ONE,
+                &cond,
+                &zero,
+                Some(self.pool.intern("ifcond")))
+        };
+
+        let mut f = self.builder.get_insert_block().parent();
+
+        let then_block = BasicBlock::new(self.pool.intern("then"), &mut f);
+        let else_block = BasicBlock::new(self.pool.intern("else"), &mut f);
+        let merge_block = BasicBlock::new(self.pool.intern("ifmerge"), &mut f);
+
+        self.builder.build_cond_br(&cond, &then_block, &else_block);
+
+        self.builder.position_at_end(&then_block);
+        let then = self.codegen(then)?;
+        self.builder.build_br(&merge_block);
+
+        // TODO: Look into this if and how exactly can it change.
+        // Codegen of 'then' can change the current block, update then for the PHI.
+        let then_block = self.builder.get_insert_block();
+
+        let el = if let Some(ref el) = el {
+            self.builder.position_at_end(&else_block);
+            let el = self.codegen(&el)?;
+            self.builder.build_br(&merge_block);
+            el
+        } else {
+            // FIXME: There should be no panic here!
+            panic!("No else.");
+        };
+
+        // TODO: Look into this if and how exactly can it change.
+        // Codegen of 'else' can change the current block, update then for the PHI.
+        let else_block = self.builder.get_insert_block();
+
+        self.builder.position_at_end(&merge_block);
+        let mut phi = self.builder.build_phi(
+            self.context.f64_type(),
+            Some(self.pool.intern("iftmp"))
+        );
+
+        phi.add_incoming(&vec![
+            (then, then_block),
+            (el, else_block),
+        ]);
+
+        Ok(phi.to_value())
+    }
+
     fn build_binop(
         &mut self,
         kind: BinOpKind,
@@ -210,12 +267,12 @@ impl Compiler {
         let rhs = self.codegen(&rhs)?;
 
         Ok(match kind {
-            Eq           => build_fp_cmp(self, RP::RealUEQ, &lhs, &rhs),
-            NotEq        => build_fp_cmp(self, RP::RealUNE, &lhs, &rhs),
-            GreaterThan  => build_fp_cmp(self, RP::RealUGT, &lhs, &rhs),
-            GreaterEq    => build_fp_cmp(self, RP::RealUGE, &lhs, &rhs),
-            LessThan     => build_fp_cmp(self, RP::RealULT, &lhs, &rhs),
-            LessEq       => build_fp_cmp(self, RP::RealULE, &lhs, &rhs),
+            Eq           => build_fp_cmp(self, RP::UEQ, &lhs, &rhs),
+            NotEq        => build_fp_cmp(self, RP::UNE, &lhs, &rhs),
+            GreaterThan  => build_fp_cmp(self, RP::UGT, &lhs, &rhs),
+            GreaterEq    => build_fp_cmp(self, RP::UGE, &lhs, &rhs),
+            LessThan     => build_fp_cmp(self, RP::ULT, &lhs, &rhs),
+            LessEq       => build_fp_cmp(self, RP::ULE, &lhs, &rhs),
             Add          => self.builder.build_fp_add(&lhs, &rhs, Some(self.pool.intern("addtmp"))),
             Sub          => self.builder.build_fp_sub(&lhs, &rhs, Some(self.pool.intern("subtmp"))),
             Mul          => self.builder.build_fp_mul(&lhs, &rhs, Some(self.pool.intern("multmp"))),
@@ -251,7 +308,7 @@ impl Compiler {
                 acc
             });
 
-        let bb = BasicBlock::create_and_append(self.pool.intern("entry"), &mut f);
+        let bb = BasicBlock::new(self.pool.intern("entry"), &mut f);
         self.builder.position_at_end(&bb);
 
         let ret = self.codegen(&body)?;

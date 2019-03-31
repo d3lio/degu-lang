@@ -3,12 +3,15 @@ use libc::c_uint;
 use llvm::LLVMRealPredicate;
 use llvm::core::{
     LLVMBuildAdd,
+    LLVMBuildBr,
     LLVMBuildCall,
+    LLVMBuildCondBr,
     LLVMBuildFAdd,
     LLVMBuildFCmp,
     LLVMBuildFMul,
     LLVMBuildFSub,
     LLVMBuildMul,
+    LLVMBuildPhi,
     LLVMBuildRet,
     LLVMBuildRetVoid,
     LLVMBuildSub,
@@ -17,6 +20,7 @@ use llvm::core::{
     LLVMConstReal,
     LLVMCreateBuilderInContext,
     LLVMDisposeBuilder,
+    LLVMGetInsertBlock,
     LLVMPositionBuilderAtEnd,
 };
 use llvm::prelude::LLVMBool;
@@ -29,7 +33,7 @@ use super::context::Context;
 use super::llvm_ref::LlvmRef;
 use super::types::Type;
 use super::util::EMPTY_C_STR;
-use super::value::{AnyValue, Function};
+use super::value::{AnyValue, Function, Phi};
 
 pub struct Builder {
     pub(crate) ptr: <Self as LlvmRef>::Ref,
@@ -43,24 +47,25 @@ pub enum BuilderError {
     },
 }
 
+// TODO: Expand the abbreviations.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RealPredicate {
-    RealPredicateFalse,
-    RealOEQ,
-    RealOGT,
-    RealOGE,
-    RealOLT,
-    RealOLE,
-    RealONE,
-    RealORD,
-    RealUNO,
-    RealUEQ,
-    RealUGT,
-    RealUGE,
-    RealULT,
-    RealULE,
-    RealUNE,
-    RealPredicateTrue,
+    False,
+    OEQ,
+    OGT,
+    OGE,
+    OLT,
+    OLE,
+    ONE,
+    ORD,
+    UNO,
+    UEQ,
+    UGT,
+    UGE,
+    ULT,
+    ULE,
+    UNE,
+    True,
 }
 
 impl RealPredicate {
@@ -69,22 +74,22 @@ impl RealPredicate {
         use RealPredicate::*;
 
         match self {
-            RealPredicateFalse => LLVMRealPredicateFalse,
-            RealOEQ => LLVMRealOEQ,
-            RealOGT => LLVMRealOGT,
-            RealOGE => LLVMRealOGE,
-            RealOLT => LLVMRealOLT,
-            RealOLE => LLVMRealOLE,
-            RealONE => LLVMRealONE,
-            RealORD => LLVMRealORD,
-            RealUNO => LLVMRealUNO,
-            RealUEQ => LLVMRealUEQ,
-            RealUGT => LLVMRealUGT,
-            RealUGE => LLVMRealUGE,
-            RealULT => LLVMRealULT,
-            RealULE => LLVMRealULE,
-            RealUNE => LLVMRealUNE,
-            RealPredicateTrue => LLVMRealPredicateTrue,
+            False => LLVMRealPredicateFalse,
+            OEQ => LLVMRealOEQ,
+            OGT => LLVMRealOGT,
+            OGE => LLVMRealOGE,
+            OLT => LLVMRealOLT,
+            OLE => LLVMRealOLE,
+            ONE => LLVMRealONE,
+            ORD => LLVMRealORD,
+            UNO => LLVMRealUNO,
+            UEQ => LLVMRealUEQ,
+            UGT => LLVMRealUGT,
+            UGE => LLVMRealUGE,
+            ULT => LLVMRealULT,
+            ULE => LLVMRealULE,
+            UNE => LLVMRealUNE,
+            True => LLVMRealPredicateTrue,
         }
     }
 }
@@ -118,6 +123,12 @@ impl Builder {
     pub(crate) fn new(context: &mut Context) -> Self {
         Self {
             ptr: unsafe { LLVMCreateBuilderInContext(context.llvm_ref()) },
+        }
+    }
+
+    pub fn get_insert_block(&self) -> BasicBlock {
+        BasicBlock {
+            ptr: unsafe { LLVMGetInsertBlock(self.ptr) },
         }
     }
 
@@ -202,6 +213,30 @@ impl Builder {
                     ty.llvm_ref(),
                     name.map_or(EMPTY_C_STR, CStr::as_ptr),
                 )
+            }
+        }
+    }
+
+    pub fn build_br(&mut self, dest: &BasicBlock) -> AnyValue {
+        AnyValue {
+            ptr: unsafe { LLVMBuildBr(self.ptr, dest.llvm_ref()) },
+        }
+    }
+
+    pub fn build_cond_br(&mut self, cond: &AnyValue, then: &BasicBlock, el: &BasicBlock) -> AnyValue {
+        AnyValue {
+            ptr: unsafe {
+                LLVMBuildCondBr(self.ptr, cond.llvm_ref(), then.llvm_ref(), el.llvm_ref())
+            },
+        }
+    }
+
+    pub fn build_phi(&mut self, ty: Type, name: Option<&CStr>) -> Phi {
+        Phi {
+            value: AnyValue {
+                ptr: unsafe {
+                    LLVMBuildPhi(self.ptr, ty.llvm_ref(), name.map_or(EMPTY_C_STR, CStr::as_ptr))
+                },
             }
         }
     }

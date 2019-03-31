@@ -20,5 +20,5 @@ pub mod prelude {
     pub use super::module::Module;
     pub use super::transformation::FunctionPassManager;
     pub use super::types::Type;
-    pub use super::value::{AnyValue, Function, Value};
+    pub use super::value::{AnyValue, Function};
 }

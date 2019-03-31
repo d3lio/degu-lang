@@ -28,7 +28,7 @@ fn create_function(
         param.set_name(pool.intern(name));
     }
 
-    BasicBlock::create_and_append(pool.intern("entry"), &mut f);
+    BasicBlock::new(pool.intern("entry"), &mut f);
 
     f
 }

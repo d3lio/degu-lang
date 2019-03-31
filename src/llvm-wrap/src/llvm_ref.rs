@@ -9,7 +9,7 @@ use super::execution_engine::{ExecutionEngine, TargetData};
 use super::module::Module;
 use super::transformation::FunctionPassManagerBuilder;
 use super::types::Type;
-use super::value::{AnyValue, Function};
+use super::value::{AnyValue, Function, Phi};
 
 pub trait LlvmRef {
     type Ref;
@@ -38,6 +38,7 @@ imp_llvm_ref! {
     Type, LLVMTypeRef, |self| self.ptr;
     AnyValue, LLVMValueRef, |self| self.ptr;
     Function, LLVMValueRef, |self| self.value.ptr;
+    Phi, LLVMValueRef, |self| self.value.ptr;
     FunctionPassManagerBuilder, LLVMPassManagerRef, |self| self.ptr;
     TargetData, LLVMTargetDataRef, |self| self.ptr;
 }

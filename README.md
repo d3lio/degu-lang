@@ -16,13 +16,19 @@ Other than just run `cargo run -p compiler`.
 
 main.dg
 ```f#
+let max3 a b c = if a > b then a else if b > c then b else c
+
+let ifs a b c value =
+    value + max3 a b c
+
 let number_ops a b c =
     print_number a
     print_number b
     print_number c
-    a - 2 + b - 3 + c * 10 + (a < b)
+    ifs a b c ((a + 1) * (a + 1) + 2 + (4 + 5 * 2 - 10)) - 4
 
 let main _ = print_number (number_ops 1 2 3)
+
 ```
 
 stdout
@@ -30,5 +36,5 @@ stdout
 1
 2
 3
-29
+9
 ```

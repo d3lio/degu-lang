@@ -1,4 +1,7 @@
+use libc::c_uint;
+
 use llvm::core::{
+    LLVMAddIncoming,
     LLVMCountParams,
     LLVMGetEntryBasicBlock,
     LLVMGetParams,
@@ -25,10 +28,10 @@ pub struct Function {
     pub(crate) value: AnyValue,
 }
 
-pub trait Value: Debug + LlvmRef {}
-
-impl Value for AnyValue {}
-impl Value for Function {}
+#[derive(Clone, PartialEq, Eq)]
+pub struct Phi {
+    pub(crate) value: AnyValue,
+}
 
 impl Debug for AnyValue {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -81,6 +84,32 @@ impl Function {
                 .into_iter()
                 .map(|ptr| AnyValue { ptr })
                 .collect::<Vec<_>>()
+        }
+    }
+}
+
+impl Phi {
+    pub fn as_value(&self) -> &AnyValue {
+        &self.value
+    }
+
+    pub fn to_value(self) -> AnyValue {
+        self.value
+    }
+
+    pub fn add_incoming(&mut self, incoming: &[(AnyValue, BasicBlock)]) {
+        let (mut values, mut blocks): (Vec<_>, Vec<_>) = incoming
+            .into_iter()
+            .map(|(v, b)| (v.llvm_ref(), b.llvm_ref()))
+            .unzip();
+
+        unsafe {
+            LLVMAddIncoming(
+                self.llvm_ref(),
+                values.as_mut_ptr(),
+                blocks.as_mut_ptr(),
+                incoming.len() as c_uint,
+            );
         }
     }
 }

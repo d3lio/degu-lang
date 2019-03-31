@@ -50,6 +50,8 @@ pub struct CompilerError {
     message: String,
 }
 
+type CodegenResult = Result<AnyValue, CompilerError>;
+
 impl Compiler {
     pub fn new() -> Self {
         let mut pool = CStringInternPool::new();
@@ -115,139 +117,161 @@ impl Compiler {
     //     let Compiler { pool, context, module, builder, .. } = self;
     // }
 
-    fn codegen(&mut self, ast: &AstNode) -> Result<AnyValue, CompilerError> {
+    fn codegen(&mut self, ast: &AstNode) -> CodegenResult {
         match &*ast.expr {
             Ast::Number(num) => Ok(self.builder.build_const_fp(self.context.f64_type(), *num)),
-            Ast::Ref(name) => {
-                if name == "_" {
-                    return Err(CompilerError {
-                        message: format!(
-                            "Illegal reference _ at {:?}",
-                            pretty_span(&ast.span)),
-                    });
-                }
-
-                self.env.vars.get(name)
-                    .map(|var| var.clone())
-                    .ok_or(CompilerError{
-                        message: format!(
-                            "Unknown variable ref {:?} at {:?}",
-                            name,
-                            pretty_span(&ast.span)),
-                    })
-            },
-            Ast::Call { name, args } => {
-                let values = args
-                    .iter()
-                    .map(|arg| self.codegen(arg))
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                let f = self.env.defs.get(name)
-                    .ok_or(CompilerError{
-                        message: format!(
-                            "Unknown function ref {:?} at {:?}",
-                            name,
-                            pretty_span(&ast.span)),
-                    })?;
-
-                self.builder.build_call(f, &values, None)
-                    .map_err(|err| CompilerError { message: format!("{:?}", err) })
-            },
-            Ast::BinOp { kind, lhs, rhs } => {
-                use RealPredicate as RP;
-
-                let lhs = self.codegen(&lhs)?;
-                let rhs = self.codegen(&rhs)?;
-
-                macro_rules! build_binop {
-                    ($f:ident, $name: expr) => {
-                        self.builder.$f(&lhs, &rhs, Some(self.pool.intern($name)))
-                    };
-                }
-
-                Ok(match kind {
-                    BinOpKind::Eq           => self.build_fp_cmp(RP::RealUEQ, &lhs, &rhs),
-                    BinOpKind::NotEq        => self.build_fp_cmp(RP::RealUNE, &lhs, &rhs),
-                    BinOpKind::GreaterThan  => self.build_fp_cmp(RP::RealUGT, &lhs, &rhs),
-                    BinOpKind::GreaterEq    => self.build_fp_cmp(RP::RealUGE, &lhs, &rhs),
-                    BinOpKind::LessThan     => self.build_fp_cmp(RP::RealULT, &lhs, &rhs),
-                    BinOpKind::LessEq       => self.build_fp_cmp(RP::RealULE, &lhs, &rhs),
-                    BinOpKind::Add          => build_binop!(build_fp_add, "addtmp"),
-                    BinOpKind::Sub          => build_binop!(build_fp_sub, "subtmp"),
-                    BinOpKind::Mul          => build_binop!(build_fp_mul, "multmp"),
-                })
-            },
-            Ast::Block(exprs) => {
-                exprs
-                    .iter()
-                    .map(|expr| self.codegen(expr))
-                    .collect::<Result<Vec<_>, _>>()?
-                    .into_iter()
-                    .last()
-                    .ok_or(CompilerError {
-                        message: format!(
-                            "Found empty block which is invalid value! {:?}",
-                            pretty_span(&ast.span)),
-                    })
-            },
+            Ast::Block(exprs) => self.build_block(&ast.span, exprs),
+            Ast::Ref(name) => self.build_ref(&ast.span, name),
+            Ast::Call { name, args } => self.build_call(&ast.span, name, args),
+            Ast::BinOp { kind, lhs, rhs } => self.build_binop(*kind, lhs, rhs),
             Ast::Function { prototype: Prototype { name, args }, body } => {
-                let f64_type = self.context.f64_type();
-                let void_type = self.context.void_type();
-                let is_main = name == "main";
-
-                let mut f = {
-                    let ret_type = if is_main { void_type } else { f64_type };
-                    let arg_types = if is_main { vec![] } else { vec![f64_type; args.len()] };
-
-                    self.module.function_prototype(
-                        Some(self.pool.intern(name.as_ref())),
-                        Context::function_type(ret_type, &arg_types, false),
-                    )
-                };
-
-                self.env.vars = f.params()
-                    .into_iter()
-                    .zip(args)
-                    .fold(HashMap::new(), |mut acc, (mut param, name)| {
-                        param.set_name(self.pool.intern(name.as_ref()));
-                        acc.insert(name.clone(), param);
-                        acc
-                    });
-
-                let bb = BasicBlock::create_and_append(self.pool.intern("entry"), &mut f);
-                self.builder.position_at_end(&bb);
-
-                let ret = self.codegen(&body)?;
-                if is_main {
-                    self.builder.build_ret_void();
-                } else {
-                    self.builder.build_ret(&ret);
-                }
-
-                if verify_function(&f, VerifierFailureAction::PrintMessageAction) {
-                    return Err(CompilerError {
-                        message: format!("{:?}", f),
-                    });
-                }
-
-                self.function_optimizer.run(&mut f);
-
-                self.env.defs.insert(name.clone(), f.clone());
-
-                Ok(f.to_value())
+                self.build_function(name, args, body)
             },
             _ => unimplemented!(),
         }
     }
 
-    fn build_fp_cmp(&mut self, p: RealPredicate, l: &AnyValue, r: &AnyValue) -> AnyValue {
-        let cmp = self.builder.build_fp_cmp(p, l, r, Some(self.pool.intern("cmptmp")));
+    fn build_block(&mut self, span: &Span, exprs: &Vec<AstNode>) -> CodegenResult {
+        exprs
+            .iter()
+            .map(|expr| self.codegen(expr))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .last()
+            .ok_or(CompilerError {
+                message: format!(
+                    "Found empty block which is invalid value! {:?}",
+                    pretty_span(span)),
+            })
+    }
 
-        self.builder.build_cast_uint_to_fp(
-            cmp,
-            self.context.f64_type(),
-            Some(self.pool.intern("booltmp")),
-        )
+    fn build_ref(&mut self, span: &Span, name: &String) -> CodegenResult {
+        if name == "_" {
+            return Err(CompilerError {
+                message: format!(
+                    "Illegal reference _ at {:?}",
+                    pretty_span(span)),
+            });
+        }
+
+        self.env.vars.get(name)
+            .map(|var| var.clone())
+            .ok_or(CompilerError{
+                message: format!(
+                    "Unknown variable ref {:?} at {:?}",
+                    name,
+                    pretty_span(span)),
+            })
+    }
+
+    fn build_call(&mut self, span: &Span, name: &String, args: &Vec<AstNode>) -> CodegenResult {
+        let values = args
+            .iter()
+            .map(|arg| self.codegen(arg))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let f = self.env.defs.get(name)
+            .ok_or(CompilerError{
+                message: format!(
+                    "Unknown function ref {:?} at {:?}",
+                    name,
+                    pretty_span(span)),
+            })?;
+
+        self.builder.build_call(f, &values, None)
+            .map_err(|err| CompilerError { message: format!("{:?}", err) })
+    }
+
+    fn build_binop(
+        &mut self,
+        kind: BinOpKind,
+        lhs: &AstNode,
+        rhs: &AstNode) -> CodegenResult
+    {
+        use RealPredicate as RP;
+        use BinOpKind::*;
+
+        fn build_fp_cmp(
+            compiler: &mut Compiler,
+            p: RealPredicate,
+            l: &AnyValue,
+            r: &AnyValue) -> AnyValue
+        {
+            let cmp = compiler.builder.build_fp_cmp(p, l, r, Some(compiler.pool.intern("cmptmp")));
+
+            compiler.builder.build_cast_uint_to_fp(
+                cmp,
+                compiler.context.f64_type(),
+                Some(compiler.pool.intern("booltmp")),
+            )
+        }
+
+        let lhs = self.codegen(&lhs)?;
+        let rhs = self.codegen(&rhs)?;
+
+        Ok(match kind {
+            Eq           => build_fp_cmp(self, RP::RealUEQ, &lhs, &rhs),
+            NotEq        => build_fp_cmp(self, RP::RealUNE, &lhs, &rhs),
+            GreaterThan  => build_fp_cmp(self, RP::RealUGT, &lhs, &rhs),
+            GreaterEq    => build_fp_cmp(self, RP::RealUGE, &lhs, &rhs),
+            LessThan     => build_fp_cmp(self, RP::RealULT, &lhs, &rhs),
+            LessEq       => build_fp_cmp(self, RP::RealULE, &lhs, &rhs),
+            Add          => self.builder.build_fp_add(&lhs, &rhs, Some(self.pool.intern("addtmp"))),
+            Sub          => self.builder.build_fp_sub(&lhs, &rhs, Some(self.pool.intern("subtmp"))),
+            Mul          => self.builder.build_fp_mul(&lhs, &rhs, Some(self.pool.intern("multmp"))),
+        })
+    }
+
+    fn build_function(
+        &mut self,
+        name: &String,
+        args: &Vec<String>,
+        body: &AstNode) -> CodegenResult
+    {
+        let f64_type = self.context.f64_type();
+        let void_type = self.context.void_type();
+        let is_main = name == "main";
+
+        let mut f = {
+            let ret_type = if is_main { void_type } else { f64_type };
+            let arg_types = if is_main { vec![] } else { vec![f64_type; args.len()] };
+
+            self.module.function_prototype(
+                Some(self.pool.intern(name.as_ref())),
+                Context::function_type(ret_type, &arg_types, false),
+            )
+        };
+
+        self.env.vars = f.params()
+            .into_iter()
+            .zip(args)
+            .fold(HashMap::new(), |mut acc, (mut param, name)| {
+                param.set_name(self.pool.intern(name.as_ref()));
+                acc.insert(name.clone(), param);
+                acc
+            });
+
+        let bb = BasicBlock::create_and_append(self.pool.intern("entry"), &mut f);
+        self.builder.position_at_end(&bb);
+
+        let ret = self.codegen(&body)?;
+        if is_main {
+            self.builder.build_ret_void();
+        } else {
+            self.builder.build_ret(&ret);
+        }
+
+        if verify_function(&f, VerifierFailureAction::PrintMessageAction) {
+            return Err(CompilerError {
+                message: format!("{:?}", f),
+            });
+        }
+
+        self.function_optimizer.run(&mut f);
+
+        self.env.defs.insert(name.clone(), f.clone());
+
+        Ok(f.to_value())
     }
 }
 

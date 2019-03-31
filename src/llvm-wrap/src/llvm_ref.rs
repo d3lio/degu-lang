@@ -1,10 +1,11 @@
 use llvm::execution_engine::LLVMExecutionEngineRef;
 use llvm::prelude::*;
+use llvm::target::LLVMTargetDataRef;
 
 use super::basic_block::BasicBlock;
 use super::builder::Builder;
 use super::context::Context;
-use super::execution_engine::ExecutionEngine;
+use super::execution_engine::{ExecutionEngine, TargetData};
 use super::module::Module;
 use super::transformation::FunctionPassManagerBuilder;
 use super::types::Type;
@@ -38,4 +39,5 @@ imp_llvm_ref! {
     AnyValue, LLVMValueRef, |self| self.ptr;
     Function, LLVMValueRef, |self| self.value.ptr;
     FunctionPassManagerBuilder, LLVMPassManagerRef, |self| self.ptr;
+    TargetData, LLVMTargetDataRef, |self| self.ptr;
 }

@@ -4,11 +4,16 @@ use llvm::execution_engine::{
     LLVMDisposeExecutionEngine,
     LLVMGetFunctionAddress,
     LLVMLinkInMCJIT,
+    LLVMGetExecutionEngineTargetMachine,
 };
 use llvm::target::{
-    LLVM_InitializeNativeTarget,
-    LLVM_InitializeNativeAsmPrinter,
     LLVM_InitializeNativeAsmParser,
+    LLVM_InitializeNativeAsmPrinter,
+    LLVM_InitializeNativeTarget,
+};
+use llvm::target_machine::{
+    LLVMTargetMachineRef,
+    LLVMCreateTargetDataLayout,
 };
 
 use std::ffi::CStr;
@@ -38,6 +43,14 @@ pub fn initialize_jit() {
 }
 
 pub struct ExecutionEngine {
+    pub(crate) ptr: <Self as LlvmRef>::Ref,
+}
+
+pub struct TargetMachine {
+    pub(crate) ptr: LLVMTargetMachineRef,
+}
+
+pub struct TargetData {
     pub(crate) ptr: <Self as LlvmRef>::Ref,
 }
 
@@ -79,5 +92,23 @@ impl ExecutionEngine {
 
     pub unsafe fn add_global_mapping(&mut self, value: &AnyValue, addr: usize) {
         LLVMAddGlobalMapping(self.ptr, value.llvm_ref(), mem::transmute(addr));
+    }
+
+    pub fn target_machine(&self) -> TargetMachine {
+        TargetMachine {
+            ptr: unsafe {
+                LLVMGetExecutionEngineTargetMachine(self.ptr)
+            },
+        }
+    }
+}
+
+impl TargetMachine {
+    pub fn create_data_layout(&mut self) -> TargetData {
+        TargetData {
+            ptr: unsafe {
+                LLVMCreateTargetDataLayout(self.ptr)
+            },
+        }
     }
 }

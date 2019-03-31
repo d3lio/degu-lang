@@ -5,12 +5,14 @@ use llvm::core::{
     LLVMModuleCreateWithNameInContext,
     LLVMPrintModuleToString,
 };
+use llvm::target::LLVMSetModuleDataLayout;
 
 use std::ffi::CStr;
 use std::fmt::{self, Debug, Formatter};
 use std::ops::Drop;
 
 use super::context::Context;
+use super::execution_engine::TargetData;
 use super::llvm_ref::LlvmRef;
 use super::transformation::FunctionPassManagerBuilder;
 use super::types::Type;
@@ -76,5 +78,11 @@ impl Module {
 
     pub fn function_pass_manager_builder(&mut self) -> FunctionPassManagerBuilder {
         FunctionPassManagerBuilder::new(self)
+    }
+
+    pub fn set_data_layout(&mut self, target_data_layout: TargetData) {
+        unsafe {
+            LLVMSetModuleDataLayout(self.ptr, target_data_layout.llvm_ref())
+        }
     }
 }

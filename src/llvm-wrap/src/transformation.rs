@@ -23,7 +23,7 @@ pub struct FunctionPassManager {
 }
 
 pub struct FunctionPassManagerBuilder {
-    pub(crate) ptr: LLVMPassManagerRef,
+    pub(crate) ptr: <Self as LlvmRef>::Ref,
     done: bool,
 }
 
